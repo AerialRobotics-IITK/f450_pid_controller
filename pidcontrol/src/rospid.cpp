@@ -13,24 +13,13 @@
 using namespace std;
 using namespace Eigen;
 
-double vx1 = 1, vy1 = 1; //defined for setpoint velocity from controller
+double imu_yaw = 0;
 
 Matrix<float, 3, 3> R;
 Matrix<float, 3, 3> R_inv;
 Matrix<float, 3, 1> VelMat;
 
-void imuCallback(const sensor_msgs::Imu::ConstPtr &msg)
-{
-  double x, y, z, w;
-
-  x = msg->orientation.x;
-  y = msg->orientation.y;
-  z = msg->orientation.z;
-  w = msg->orientation.w;
-  Quaternionf quat;
-  quat = Eigen::Quaternionf(x, y, z, w);
-  R = quat.toRotationMatrix();
-}
+void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
 
 int main(int argc, char **argv)
 {
@@ -40,8 +29,9 @@ int main(int argc, char **argv)
   ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>("/mavros/imu/data", 100, imuCallback);
 
   ros::Publisher cmd_att_pub = nh.advertise<geometry_msgs::PoseStamped>("/mavros/mocap/pose", 100);
+  ros::Publisher setpoint_pub = nh.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
 
-  geometry_msgs::PoseStamped att_sp;
+  geometry_msgs::PoseStamped att_sp, setpoint;
   geometry_msgs::Quaternion quaternion;
   geometry_msgs::TransformStamped transformStamped;
 
@@ -49,8 +39,9 @@ int main(int argc, char **argv)
 
   tf2_ros::Buffer tfBuffer;
   tf2_ros::TransformListener tfListener(tfBuffer);
-
-  float kp_x = 1, kp_y = 1, v_kp_x = 1, v_ki_x = 0, v_kd_x = 0, v_kp_y = 1, v_ki_y = 0, v_kd_y = 0, vx = 0, vy = 0, x_des = 0, y_des = 0;
+  tf::Quaternion q;
+  
+  float kp_x = 1, kp_y = 1, v_kp_x = 1, v_ki_x = 0, v_kd_x = 0, v_kp_y = 1, v_ki_y = 0, v_kd_y = 0, vx = 0, vy = 0, x_des = 0, y_des = 0, set_alt = 1.0;
   double dt, current_time, last_time, mav_x = 0, mav_y = 0;
   double error_x, error_y, iTerm_x, iTerm_y, dTerm_x, dTerm_y, last_input_x, last_input_y, ang_x, ang_y;
 
@@ -68,7 +59,7 @@ int main(int argc, char **argv)
     nh.getParam("/aruco_pid_control/v_kp_y", v_kp_y);
     nh.getParam("/aruco_pid_control/v_ki_y", v_ki_y);
     nh.getParam("/aruco_pid_control/v_kd_y", v_kd_y);
-
+    nh.getParam("/aruco_pid_control/set_alt", set_alt);
     try
     {
       transformStamped = tfBuffer.lookupTransform("world", "camera", ros::Time(0));
@@ -103,14 +94,14 @@ int main(int argc, char **argv)
 
     if (dt != 0)
     {
-      error_x = (vx - vx1);
+      error_x = (vx );
       iTerm_x += error_x * dt;
       dTerm_x = (error_x - last_input_x) / dt;
       last_input_x = error_x;
 
       ang_x = v_kp_x * error_x + v_ki_x * iTerm_x - v_kd_x * dTerm_x;
 
-      error_y = (vy - vy1);
+      error_y = (vy);
       iTerm_y += error_y * dt;
       dTerm_y = (error_y - last_input_y) / dt;
       last_input_y = error_y;
@@ -122,6 +113,13 @@ int main(int argc, char **argv)
     att_sp.pose.position.x = ang_x;
     att_sp.pose.position.y = ang_y;
 
+    q.setRPY(0, 0, imu_yaw);
+
+    setpoint.pose.orientation.z = q.z();
+    setpoint.pose.orientation.w = q.w();
+
+    setpoint.pose.position.z = set_alt;
+
     cmd_att_pub.publish(att_sp);
 
     ros::spinOnce();
@@ -129,4 +127,22 @@ int main(int argc, char **argv)
   }
 
   return 0;
+}
+
+void imuCallback(const sensor_msgs::Imu::ConstPtr &msg)
+{
+  double x, y, z, w;
+
+  x = msg->orientation.x;
+  y = msg->orientation.y;
+  z = msg->orientation.z;
+  w = msg->orientation.w;
+  Quaternionf quat;
+  quat = Eigen::Quaternionf(x, y, z, w);
+  R = quat.toRotationMatrix();
+
+  tf::Quaternion q1(x, y, z, w);
+  tf::Matrix3x3 m(q1);
+  double r, p;
+  m.getRPY(r, p, imu_yaw);
 }
