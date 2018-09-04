@@ -14,19 +14,20 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   sensor_msgs
   std_msgs
+  px_comm
   tf2_msgs
 )
-catkin_package()
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
+
+catkin_package( INCLUDE_DIRS include)
+include_directories(include ${catkin_INCLUDE_DIRS})
+
 find_package(cmake_modules REQUIRED)
 
 find_package(Eigen REQUIRED)
 include_directories(${Eigen_INCLUDE_DIRS})
 
 
-add_executable(pidcontrol src/rospid.cpp)
+add_executable(pidcontrol src/aruco.cpp)
 target_link_libraries(pidcontrol ${catkin_LIBRARIES})
 
 
