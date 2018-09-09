@@ -269,7 +269,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg)
 void arucocb(const geometry_msgs::PoseStamped::ConstPtr &msg)
 {
     x = msg->pose.position.x;
-    y = msg->pose.position.y;
+    y = -1*msg->pose.position.y;
     aruco_detected_flag = 1;
 }
 
