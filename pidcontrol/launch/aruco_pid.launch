@@ -1,5 +1,5 @@
 <launch>
-	<node name="aruco_pid" type="pidcontrol" pkg="pidcontrol" output="screen">
-	<rosparam file="$(find pidcontrol)/param/pid_publish.yaml" />
+	<node name="pidcontrol" type="pidcontrol" pkg="pidcontrol" output="screen">
+	<rosparam file="$(find pidcontrol)/param/pidcontrol.yaml" />
 	</node>
 </launch>

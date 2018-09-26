@@ -9,7 +9,7 @@ using namespace Eigen;
 /*flags for detection of msgs and threshold check*/
 float x = 0, y = 0, x_des = 0, y_des = 0, err_sum_x = 0.0, err_sum_y = 0.0, yaw_sp = 5.7, err_sum_pos_x = 0, err_sum_pos_y = 0;
 float vel_x = 0, vel_y = 0, vel_thresh = 1.0, vel_sp_x = 0, z_dist, att_sp_thresh = 0.3, traj_sp_threshold = 0.08;
-float vel_sp_y = 0, object_x, object_y, pick_goal_x_cb, pick_goal_y_cb, landing_threshold = 0.1, yaw_init = 5.7;
+float vel_sp_y = 0, yaw_init = 5.7;
 int index_x = 0, index_y = 0, yaw_reset = 0, off_flag = 1, grip_status = 0, trajectory_size = 0, take_off_flag = 0, distcb_count = 0;
 double x_dist = 2.0, quad_yaw, yaw_set, yaw_traj, yaw_marker, yaw_sp_temp, odom_yaw_init, odom_yaw, yaw_diff_init;
 double imu_yaw;
@@ -34,6 +34,7 @@ Quaternionf quat;
 
 Matrix<float, 3, 3> R;
 Matrix<float, 3, 3> pos;
+Matrix<float, 3, 3> pos2;
 Matrix<float, 3, 3> R_inv;
 Matrix<float, 3, 1> vel_world;
 Matrix<float, 3, 1> vel_quad;
@@ -83,14 +84,16 @@ int main(int argc, char **argv)
     while (ros::ok())
     {
         float pos_k_p_x, pos_k_p_y, pos_k_d, pos_k_i, vel_x_k_p, vel_x_k_i, vel_x_k_d, vel_y_k_p, vel_y_k_i, vel_y_k_d, set_alt;
-        nh.getParam("/vin_mission_control/pos_k_p_x", pos_k_p_x);
-        nh.getParam("/vin_mission_control/pos_k_p_y", pos_k_p_y);
-        nh.getParam("/vin_mission_control/vel_x_k_p", vel_x_k_p);
-        nh.getParam("/vin_mission_control/vel_x_k_d", vel_x_k_d);
-        nh.getParam("/vin_mission_control/vel_y_k_p", vel_y_k_p);
-        nh.getParam("/vin_mission_control/vel_y_k_d", vel_y_k_d);
-        nh.getParam("/vin_mission_control/set_alt", set_alt);
-        nh.getParam("/vin_mission_control/yaw_reset", yaw_reset);
+        nh.getParam("/pidcontrol/pos_k_p_x", pos_k_p_x);
+        nh.getParam("/pidcontrol/pos_k_p_y", pos_k_p_y);
+        nh.getParam("/pidcontrol/vel_x_k_p", vel_x_k_p);
+        nh.getParam("/pidcontrol/vel_x_k_i", vel_x_k_i);
+        nh.getParam("/pidcontrol/vel_x_k_d", vel_x_k_d);
+        nh.getParam("/pidcontrol/vel_y_k_p", vel_y_k_p);
+        nh.getParam("/pidcontrol/vel_y_k_i", vel_y_k_i);
+        nh.getParam("/pidcontrol/vel_y_k_d", vel_y_k_d);
+        //nh.getParam("/pidcontrol/set_alt", set_alt);
+        //nh.getParam("/pidcontrol/yaw_reset", yaw_reset);
 
         mocap.header.stamp = ros::Time::now();
         setpoint.header.stamp = ros::Time::now();
@@ -109,8 +112,9 @@ int main(int argc, char **argv)
 
             R_inv = R.inverse();
             pos = R_inv*pos ;
+            //pos2= R*pos;
 
-            cout<<x<<"  "<<y<<"    "<<pos(0,0)<<"    "<<pos(1,0)<<endl;
+            cout<<x<<"\t"<<y<<"\t"<<pos(0,0)<<"\t"<<pos(1,0)<<endl;
 
             if (i == 0)
             {
@@ -121,7 +125,7 @@ int main(int argc, char **argv)
             {
                 vel_x = (pos(0,0) - x_prev) * 15;
                 vel_y = (pos(1,0) - y_prev) * 15;
-                //cout<<vel_x<<"    "<<vel_y<<endl<<endl;
+                // cout<<vel_x<<"    "<<vel_y<<endl<<endl;
 
             }
 
@@ -151,6 +155,8 @@ int main(int argc, char **argv)
 
                 vel_sp_x = (x_des - pos(0,0)) * pos_k_p_x + (err_sum_pos_x)*0.015 * pos_k_i;
                 vel_sp_y = (y_des - pos(1,0)) * pos_k_p_y + (err_sum_pos_y)*0.015 * pos_k_i;
+
+                std::cout<<"des_vel"<<vel_sp_x<<": "<<vel_sp_y<<std::endl;
                 
 
                 err_sum_x = err_sum_x + (vel_x - vel_sp_x);
@@ -185,11 +191,11 @@ int main(int argc, char **argv)
                 else if (vel_sp_x < -vel_thresh)
                     vel_sp_x = -vel_thresh;
 
-                if (vel_cross_flag == 1)
-                    cout << "vel Threshold reached" << endl;
+                //if (vel_cross_flag == 1)
+                    //cout << "vel Threshold reached" << endl;
 
-                mocap.pose.position.y = ((vel_y - vel_sp_y) * vel_y_k_p + (err_sum_y)*0.015 * vel_y_k_i + (vel_y - vel_y_prev) * 15 * vel_y_k_d); //roll
-                mocap.pose.position.x = ((vel_x - vel_sp_x) * vel_x_k_p + (err_sum_x)*0.015 * vel_x_k_i + (vel_x - vel_x_prev) * 15 * vel_x_k_d); //pitch
+                mocap.pose.position.y = ((vel_x - vel_sp_x) * vel_x_k_p + (err_sum_x)*0.015 * vel_x_k_i + (vel_x - vel_x_prev) * 15 * vel_y_k_d); //roll
+                mocap.pose.position.x = ((vel_y - vel_sp_y) * vel_y_k_p + (err_sum_y)*0.015 * vel_y_k_i + (vel_y - vel_y_prev) * 15 * vel_x_k_d); //pitch
 
                 vel_sp.pose.position.x = vel_sp_x;
                 vel_sp.pose.position.y = vel_sp_y;
@@ -221,8 +227,8 @@ int main(int argc, char **argv)
             else if (mocap.pose.position.y > att_sp_thresh)
                 mocap.pose.position.y = att_sp_thresh;
 
-            if (cross_flag == 1)
-                cout << "Attitude Threshold reached" << endl;
+            //if (cross_flag == 1)
+                //cout << "Attitude Threshold reached" << endl;
             
             mocap.pose.position.z = z_dist;
             mocap_pub.publish(mocap);
@@ -269,7 +275,7 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg)
 void arucocb(const geometry_msgs::PoseStamped::ConstPtr &msg)
 {
     x = msg->pose.position.x;
-    y = -1*msg->pose.position.y;
+    y = msg->pose.position.y;
     aruco_detected_flag = 1;
 }
 

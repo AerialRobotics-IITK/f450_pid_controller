@@ -1,0 +1,10 @@
+pos_k_p_x: 1
+pos_k_p_y: 1
+pos_k_i: 0 
+vel_x_k_p: 1
+vel_x_k_i: 0 
+vel_x_k_d: 0 
+vel_y_k_p: 1 
+vel_y_k_i: 0
+vel_y_k_d: 0
+
