@@ -1,4 +1,3 @@
-
 #include <vin_mission_control.h>
 
 #define PI 3.14159265
@@ -14,17 +13,9 @@ int index_x = 0, index_y = 0, yaw_reset = 0, off_flag = 1, grip_status = 0, traj
 double x_dist = 2.0, quad_yaw, yaw_set, yaw_traj, yaw_marker, yaw_sp_temp, odom_yaw_init, odom_yaw, yaw_diff_init;
 double imu_yaw;
 int vel_cross_flag = 0, cross_flag = 0, aruco_detected_flag = 0;
-
-float landing_time = 7;
-float takeoff_time = 8;
-float landing_time_threshold = 4;
-float yaw_alignment_time = 4;
-float landing_height = 0.3;
-float gripping_sleep_time = 3;
-float land_mode_sleep_time = 3;
 string mode_;
 
-tf::Quaternion q;
+tf::Quaternion q, quaternion;
 geometry_msgs::PoseStamped mocap, setpoint, vel_sp, pos_sp, goal_sp,vel_;
 geometry_msgs::PoseArray traj, frontiers_;
 std_msgs::Int32 gripper_pos, mission_reset_flag;
@@ -41,13 +32,11 @@ Matrix<float, 3, 1> vel_quad;
 Matrix<float, 3, 1> vel_sp_world;
 Matrix<float, 3, 1> vel_sp_quad;
 Matrix<float, 3, 1> rpy;
-geometry_msgs::Quaternion quaternion;
-//Quaternionf quat;
-
  
 void statecb(const mavros_msgs::State::ConstPtr &msg);
 void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
 void arucocb(const geometry_msgs::PoseStamped::ConstPtr &msg);
+void sonarcb(const std_msgs::Int32::ConstPtr &msg);
 //void flowcb(const px_comm::OpticalFlow::ConstPtr &msg);
 
 int main(int argc, char **argv)
@@ -58,6 +47,7 @@ int main(int argc, char **argv)
     ros::Subscriber state_sub = nh.subscribe("/mavros/state", 100, statecb);
     ros::Subscriber imu_sub = nh.subscribe("/mavros/imu/data", 100, imuCallback);
     ros::Subscriber aruco_sub = nh.subscribe("/aruco_single/pose", 10, arucocb);
+    ros::Subscriber sonar_sub = nh.subscribe("/sonar",10,sonarcb)
     //ros::Subscriber flow_sub = nh.subscribe("/px4flow/opt_flow", 10, flowcb);
    
     ros::Publisher setpoint_pub = nh.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
@@ -77,7 +67,6 @@ int main(int argc, char **argv)
     double timer_ = 0, timer_land = 0;
     float vel_x_prev, vel_y_prev, x_prev, y_prev, set_alt_temp = 0.8;
     int i = 0;
-    float x_temp, y_temp;
 
     ros::Rate loop_rate(15);
 
@@ -101,9 +90,6 @@ int main(int argc, char **argv)
         vel_.header.stamp = ros::Time::now();
         pos_sp.header.stamp = ros::Time::now();
     
-        geometry_msgs::TransformStamped mav_in_world;
-        
-
         if (aruco_detected_flag == 1 )
         {
             pos(0,0)=x;
@@ -112,7 +98,6 @@ int main(int argc, char **argv)
 
             R_inv = R.inverse();
             pos = R_inv*pos ;
-            //pos2= R*pos;
 
             cout<<x<<"\t"<<y<<"\t"<<pos(0,0)<<"\t"<<pos(1,0)<<endl;
 
@@ -126,7 +111,6 @@ int main(int argc, char **argv)
                 vel_x = (pos(0,0) - x_prev) * 15;
                 vel_y = (pos(1,0) - y_prev) * 15;
                 // cout<<vel_x<<"    "<<vel_y<<endl<<endl;
-
             }
 
             x_prev = pos(0,0);
@@ -279,6 +263,10 @@ void arucocb(const geometry_msgs::PoseStamped::ConstPtr &msg)
     aruco_detected_flag = 1;
 }
 
+void sonarcb(const std_msgs::Int32::ConstPtr &msg)
+{
+    z_dist = msg->data;
+}
 /*void flowcb(const px_comm::OpticalFlow::ConstPtr &msg)
 {
     double x_dist_temp = msg->ground_distance;

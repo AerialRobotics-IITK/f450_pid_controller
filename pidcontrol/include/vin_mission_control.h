@@ -3,6 +3,7 @@
 
 #include "ros/ros.h"
 #include "std_msgs/String.h"
+#include "std_msgs/Int32.h"
 #include "geometry_msgs/PoseStamped.h"
 #include "mavros_msgs/AttitudeTarget.h"
 #include <mavros_msgs/CommandBool.h>
