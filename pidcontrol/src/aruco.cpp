@@ -6,13 +6,10 @@ using namespace std;
 using namespace Eigen;
 
 /*flags for detection of msgs and threshold check*/
-float x = 0, y = 0, x_des = 0, y_des = 0, err_sum_x = 0.0, err_sum_y = 0.0, yaw_sp = 5.7, err_sum_pos_x = 0, err_sum_pos_y = 0;
-float vel_x = 0, vel_y = 0, vel_thresh = 1.0, vel_sp_x = 0, z_dist, att_sp_thresh = 0.3, traj_sp_threshold = 0.08;
-float vel_sp_y = 0, yaw_init = 5.7;
-int index_x = 0, index_y = 0, yaw_reset = 0, off_flag = 1, grip_status = 0, trajectory_size = 0, take_off_flag = 0, distcb_count = 0;
-double x_dist = 2.0, quad_yaw, yaw_set, yaw_traj, yaw_marker, yaw_sp_temp, odom_yaw_init, odom_yaw, yaw_diff_init;
+float x = 0, y = 0, x_des = 0, y_des = 0, err_sum_x = 0.0, err_sum_y = 0.0, yaw_sp = 10, err_sum_pos_x = 0, err_sum_pos_y = 0;
+float vel_x = 0, vel_y = 0, vel_thresh = 1.0, vel_sp_x = 0, z_dist, att_sp_thresh = 0.1, vel_sp_y = 0;
 double imu_yaw;
-int vel_cross_flag = 0, cross_flag = 0, aruco_detected_flag = 0;
+int aruco_detected_flag = 0, vel_cross_flag = 0, cross_flag = 0;
 string mode_;
 
 tf::Quaternion q, quaternion;
@@ -47,7 +44,7 @@ int main(int argc, char **argv)
     ros::Subscriber state_sub = nh.subscribe("/mavros/state", 100, statecb);
     ros::Subscriber imu_sub = nh.subscribe("/mavros/imu/data", 100, imuCallback);
     ros::Subscriber aruco_sub = nh.subscribe("/aruco_single/pose", 10, arucocb);
-    ros::Subscriber sonar_sub = nh.subscribe("/sonar",10,sonarcb)
+    ros::Subscriber sonar_sub = nh.subscribe("/sonar",10,sonarcb);
     //ros::Subscriber flow_sub = nh.subscribe("/px4flow/opt_flow", 10, flowcb);
    
     ros::Publisher setpoint_pub = nh.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
@@ -72,7 +69,7 @@ int main(int argc, char **argv)
 
     while (ros::ok())
     {
-        float pos_k_p_x, pos_k_p_y, pos_k_d, pos_k_i, vel_x_k_p, vel_x_k_i, vel_x_k_d, vel_y_k_p, vel_y_k_i, vel_y_k_d, set_alt;
+        float pos_k_p_x, pos_k_p_y, pos_k_i, vel_x_k_p, vel_x_k_i, vel_x_k_d, vel_y_k_p, vel_y_k_i, vel_y_k_d, set_alt, yaw_reset;
         nh.getParam("/pidcontrol/pos_k_p_x", pos_k_p_x);
         nh.getParam("/pidcontrol/pos_k_p_y", pos_k_p_y);
         nh.getParam("/pidcontrol/vel_x_k_p", vel_x_k_p);
@@ -81,8 +78,8 @@ int main(int argc, char **argv)
         nh.getParam("/pidcontrol/vel_y_k_p", vel_y_k_p);
         nh.getParam("/pidcontrol/vel_y_k_i", vel_y_k_i);
         nh.getParam("/pidcontrol/vel_y_k_d", vel_y_k_d);
-        //nh.getParam("/pidcontrol/set_alt", set_alt);
-        //nh.getParam("/pidcontrol/yaw_reset", yaw_reset);
+        nh.getParam("/pidcontrol/yaw_reset", yaw_reset);
+        nh.getParam("/pidcontrol/set_alt", set_alt);
 
         mocap.header.stamp = ros::Time::now();
         setpoint.header.stamp = ros::Time::now();
@@ -90,7 +87,7 @@ int main(int argc, char **argv)
         vel_.header.stamp = ros::Time::now();
         pos_sp.header.stamp = ros::Time::now();
     
-        if (aruco_detected_flag == 1 )
+        if (aruco_detected_flag == 1)
         {
             pos(0,0)=x;
             pos(1,0)=y;
@@ -213,13 +210,22 @@ int main(int argc, char **argv)
 
             //if (cross_flag == 1)
                 //cout << "Attitude Threshold reached" << endl;
-            
-            mocap.pose.position.z = z_dist;
-            mocap_pub.publish(mocap);
-            
+
+           if (yaw_reset == 1)
+            {
+                yaw_sp = imu_yaw;
+                nh.setParam("/vin_mission_control/yaw_reset", 0);
+            }
+
+            q.setRPY(0, 0, yaw_sp);
+
+            setpoint.pose.orientation.z = q.z();
+            setpoint.pose.orientation.w = q.w();
+            setpoint.pose.position.z = set_alt;
             aruco_detected_flag = 0;
         }
-
+        mocap.pose.position.z = z_dist;
+	    mocap_pub.publish(mocap);
         setpoint_pub.publish(setpoint);
         vel_sp_pub.publish(vel_sp);
         vel_pub.publish(vel_);
@@ -227,7 +233,6 @@ int main(int argc, char **argv)
         ros::spinOnce();
         loop_rate.sleep();
     }
-
     return 0;
 }
 
@@ -246,14 +251,8 @@ void imuCallback(const sensor_msgs::Imu::ConstPtr &msg)
     //cout<<r*180/3.14<<"   "<<p*180/3.14<<"   "<<imu_yaw*180/3.14<<endl<<endl;
     tf::Quaternion q_temp;
     q_temp.setRPY(r, p, 0);
-     
-    //tf::Matrix3x3 R(q);
-    //cout<<"q"<<q_temp.w()<<endl;
-  
-  quat=Eigen::Quaternionf(q_temp.w(),q_temp.x(),q_temp.y(),q_temp.z());
-  R=quat.toRotationMatrix();
-
-    
+    quat=Eigen::Quaternionf(q_temp.w(),q_temp.x(),q_temp.y(),q_temp.z());
+    R=quat.toRotationMatrix();
 }
 
 void arucocb(const geometry_msgs::PoseStamped::ConstPtr &msg)
@@ -265,7 +264,28 @@ void arucocb(const geometry_msgs::PoseStamped::ConstPtr &msg)
 
 void sonarcb(const std_msgs::Int32::ConstPtr &msg)
 {
-    z_dist = msg->data;
+    z_dist = (msg->data)/100.0;
+    std::vector<float> v;
+    int ii = 0;
+    float median,threshold=0.4;
+
+    if(ii<16)
+	{
+        v.push_back(z_dist);
+	    ii++;
+	}
+    else
+    {
+        v.erase(v.begin()); 
+        v.push_back(z_dist);
+        sort(v.begin(), v.end()); 
+        median=v[8];
+        if(z_dist>=median-threshold && z_dist<=median+threshold)
+    	    z_dist=z_dist;
+        else
+    	    z_dist=0.8;
+    }
+// cout<<z_dist<<endl;
 }
 /*void flowcb(const px_comm::OpticalFlow::ConstPtr &msg)
 {
