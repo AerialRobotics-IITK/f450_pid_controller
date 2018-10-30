@@ -145,8 +145,8 @@ int main(int argc, char **argv)
 
                 if (mode_ == "OFFBOARD")
                 {
-                    nh.getParam("/vin_mission_control/vel_x_k_i", vel_x_k_i);
-                    nh.getParam("/vin_mission_control/vel_y_k_i", vel_y_k_i);
+                    nh.getParam("/pidcontrol/vel_x_k_i", vel_x_k_i);
+                    nh.getParam("/pidcontrol/vel_y_k_i", vel_y_k_i);
                 }
                 else
                 {
